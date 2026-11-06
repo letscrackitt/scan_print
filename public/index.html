@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Send files to print</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#172033;background:#f5f7fb}*{box-sizing:border-box}body{margin:0;padding:22px}.wrap{max-width:620px;margin:25px auto;background:#fff;padding:26px;border-radius:18px;box-shadow:0 8px 30px #15233b12}h1{margin:0 0 8px;font-size:27px}.muted{color:#667085;line-height:1.5}.drop{border:2px dashed #9aa8bb;border-radius:14px;padding:28px 16px;text-align:center;margin:22px 0;background:#fafcff}.drop input{max-width:100%}button{border:0;background:#155eef;color:white;padding:15px 20px;border-radius:10px;font-size:16px;font-weight:700;width:100%;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.files{font-size:14px;margin:12px 0}.status{margin-top:16px;padding:12px;border-radius:10px;background:#eef4ff;display:none}.privacy{font-size:12px;color:#667085;margin-top:20px}
+</style>
+</head>
+<body><main class="wrap">
+<h1>Send your files to print</h1><p class="muted">Choose your photos or documents. You don't need to share your phone number or use WhatsApp.</p>
+<div class="drop"><p><strong>Select as many files as you need</strong></p><input id="files" type="file" multiple accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt"></div>
+<div id="fileList" class="files">No files selected yet.</div>
+<button id="send">Send files to shop</button><div id="status" class="status" role="status"></div>
+<p class="privacy">Your files are sent securely to this shop and are set to expire after a short period. Do not upload documents you do not want the shop to see.</p>
+</main>
+<script>
+const input=document.querySelector("#files"),list=document.querySelector("#fileList"),send=document.querySelector("#send"),statusBox=document.querySelector("#status");
+let chosen=[];
+input.addEventListener("change",()=>{chosen=[...input.files];list.textContent=chosen.length?chosen.map(f=>f.name+" ("+Math.ceil(f.size/1024)+" KB)").join(" · "):"No files selected yet.";});
+const show=(t)=>{statusBox.style.display="block";statusBox.textContent=t;};
+send.addEventListener("click",async()=>{
+ if(!chosen.length){show("Please select at least one file.");return;}
+ send.disabled=true;
+ try{
+  const slug=location.pathname.split("/")[2]||"pilot-shop";
+  const created=await fetch("/api/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({shopSlug:slug})});
+  const order=await created.json();if(!created.ok)throw Error(order.error||"Could not start your order.");
+  for(let i=0;i<chosen.length;i++){
+   const f=chosen[i];show("Uploading "+(i+1)+" of "+chosen.length+": "+f.name);
+   const r=await fetch("/api/orders/"+order.orderId+"/files",{method:"POST",headers:{"X-Upload-Token":order.uploadToken,"X-File-Name":encodeURIComponent(f.name),"X-File-Size":String(f.size),"Content-Type":f.type||"application/octet-stream"},body:f});
+   const result=await r.json();if(!r.ok)throw Error(result.error||"Upload failed: "+f.name);
+  }
+  show("All files sent successfully. Your order number is "+order.orderId.toUpperCase()+". You can show this number at the counter.");
+  chosen=[];input.value="";list.textContent="Upload complete.";
+ }catch(e){show("Some files may not have uploaded. "+e.message+" Please ask the shopkeeper to check before retrying.");}
+ finally{send.disabled=false;}
+});
+</script></body></html>
